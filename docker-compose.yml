@@ -1,0 +1,47 @@
+networks:
+  network:
+    name: network
+    ipam:
+      config:
+        - subnet: 172.39.0.0/24
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    develop:
+      watch:
+        - action: sync
+          path: ./backend
+          target: /usr/local/app/src
+        - action: rebuild
+          path: ./backend/requirements.txt
+
+    networks:
+      - network
+  
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+
+    ports:
+      - "5173:5173"
+
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend/src
+          target: /app/src
+        - action: sync
+          path: ./frontend/public
+          target: /app/public
+        - action: rebuild
+          path: ./frontend/package.json
+
+    networks:
+      - network
+
+    depends_on:
+      - backend
