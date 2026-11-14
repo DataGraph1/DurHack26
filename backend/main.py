@@ -7,19 +7,32 @@ TICK_RATE = 1/20 #20 times a second
 
 
 class Game():
-    time_for_next_ghost_spawn : int = 0
-
+    
     def __init__(self, max_ghosts: int) -> None:
         self.max_ghosts : int = max_ghosts
-        self.ghosts : list[Ghost] = []
-        
+        self.ghosts = {}
+        self.time_for_next_ghost_spawn : float = 0.0
+        self.ghost_id_counter : int = 0
 
     def spawn_ghost(self):
-        self.ghosts.append(Ghost())
-        time_for_next_ghost_spawn = random.randint(3, 10)
+        # if current number of ghosts is less than max ghosts, add a ghost to dictionary and increment ID counter
+        if (len(self.ghosts) < self.max_ghosts):
+            self.ghosts.update({ghost_id_counter : Ghost()})
+            self.ghost_id_counter++
+        
+        # reset spawn timer
+        self.time_for_next_ghost_spawn = float(random.randint(3, 6))
 
     def update(self, dt) -> None:
-        pass
+        # decrease time until next ghost spawns
+        self.time_for_next_ghost_spawn -= dt
+
+        # if timer is up, attempt to spawn ghost
+        if (self.time_for_next_ghost_spawn <= 0):
+            spawn_ghost(self)
+        
+        # go through buffer of ghost kills, and remove any ghosts which have been killed
+        # this is todo
 
 
 
@@ -54,7 +67,10 @@ async def game_loop(game):
 
         game.update(dt)
 
+        # At this point the server should send the ghost dictionary to each client so they update themselves accordingly
+
         # claude generated I dont really understand it but I think its
         # if a tick takes longer, the next is shorter to accommodate
+        # I'm disappointed in you - Seg
         next_tick += TICK_RATE
         await asyncio.sleep(max(0, next_tick - time.monotonic()))
