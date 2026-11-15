@@ -3,6 +3,7 @@ import asyncio, random, time
 from contextlib import asynccontextmanager
 from ghost import Ghost
 from network import router, broadcast, ghost_kill_buffer # connectning web socket to ghost
+from playsound import playsound
 
 
 TICK_RATE = 1/20 #20 times a second
@@ -22,9 +23,12 @@ class Game():
         if (len(self.ghosts) < self.max_ghosts):
             self.ghosts.update({self.ghost_id_counter : Ghost()})
             self.ghost_id_counter += 1
+            playsound("sounds/spawn_ghost_sound.mp3")
 
         # reset spawn timer
         self.time_for_next_ghost_spawn = float(random.randint(3, 6))
+
+        
 
     def update(self, dt) -> None:
         # decrease time until next ghost spawns
@@ -42,6 +46,7 @@ class Game():
         # go through buffer of ghost kills, and remove any ghosts which have been killed
         for ghost_id in self.ghost_kill_buffer:
             self.ghosts.pop(ghost_id, None) # no crash if the ghost is already gone
+            playsound("sounds/ghost_kill_sound.mp3")
         self.ghost_kill_buffer.clear()
 
         # timer tick down
@@ -89,16 +94,19 @@ async def game_loop():
                     await broadcast({"type": "announcement", "message": " 2 minutes left"})
                 except Exception as e:
                     print("broadcast failed:", e)
+                playsound("sounds/time_left_120_sound.mp3")
             case 60:
                 try:
                     await broadcast({"type": "announcement", "message": "1 minute left"})
                 except Exception as e:
                     print("broadcast failed:", e)
+                playsound("sounds/time_left_60_sound.mp3")
             case 30:
                 try:
                     await broadcast({"type": "announcement", "message": "30 seconds left"})
                 except Exception as e:
                     print("broadcast failed:", e)
+                playsound("sounds/time_left_30_sound.mp3")
         
         
     # end of game announcement
@@ -106,6 +114,7 @@ async def game_loop():
         await broadcast({"type": "announcement", "message": " game over"})
     except Exception as e:
         print("broadcast failed:", e)
+    playsound("sounds/game_over_sound.mp3")
 
 # runs when code starts
 @asynccontextmanager
