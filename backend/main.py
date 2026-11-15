@@ -7,7 +7,6 @@ from network import router, broadcast # connectning web socket to ghost
 
 TICK_RATE = 1/20 #20 times a second
 
-
 class Game():
     
     def __init__(self, max_ghosts: int) -> None:
@@ -52,9 +51,12 @@ async def game_loop():
         dt = now - pre_time
         pre_time = now
 
+        before = len(game.ghosts)
         game.update(dt)
 
         try:  
+            if len(game.ghosts) > before:
+                await broadcast({"type": "announcement", "message": " ghost appeared"})
             await broadcast(game.to_message())
         except Exception as e:
             print("broadcast failed:", e)       
