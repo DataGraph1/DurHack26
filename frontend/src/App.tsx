@@ -1,12 +1,27 @@
 import { Controller } from "./components/Controller"
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 
 // phone url:  http://localhost:5173/?player=player1
 const PLAYER_ID = new URLSearchParams(window.location.search).get('player') ?? 'player1'
-const SERVER_URL = `ws://${window.location.hostname}:8000/ws?player_id=${PLAYER_ID}`
+// where this player stands inside the ghost circle (radius 2); [0, 0] = centre
+const PLAYER_OFFSET: [number, number] = [0, 0]
+// goes through the vite proxy on the same host/port, so it works over http and https
+const SERVER_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?player_id=${PLAYER_ID}`
 
 const LEVELS = ['far', 'medium', 'close']
+
+// how many degrees off the phone can point and still count as medium / close
+const MEDIUM_DEG = 45
+const CLOSE_DEG = 15
+
+function levelFromDif(dif: number | null) {
+  if (dif === null) return 0
+  const off = Math.abs(dif)
+  if (off <= CLOSE_DEG) return 2
+  if (off <= MEDIUM_DEG) return 1
+  return 0
+}
 
 function App() {
   const [status, setStatus] = useState('connecting...')
@@ -14,8 +29,10 @@ function App() {
   const [text, setText] = useState('')
   const [announcement, setAnnouncement] = useState('')
   const [ghosts, setGhosts] = useState<Record<string, number>>({})  // ghost id -> angle
+  const [scores, setScores] = useState<Record<string, number>>({})  // player id -> ghosts caught
   const webSocketRef = useRef<WebSocket | null>(null)
-  const [level, setLevel] = useState(1)        // 0 = far, 1= med, 2 = close
+  const [target, setTarget] = useState<{ dif: number | null, id: string | null }>({ dif: null, id: null })
+  const level = levelFromDif(target.dif)       // 0 = far, 1 = med, 2 = close
   const [flash, setFlash] = useState(false)    // flash enabled
   const [buzzOn, setBuzzOn] = useState(false)
 
@@ -41,7 +58,8 @@ function App() {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
         if (data.type === 'ghosts') {
-          setGhosts(data.ghosts) 
+          setGhosts(data.ghosts)
+          setScores(data.scores ?? {})
           return
         }
         if (data.type === 'announcement') {
@@ -101,22 +119,23 @@ function App() {
     if (sendToServer({ type: 'test', message: text })) setText('')
   }
 
-  // catch whichever ghost exists (until the compass picks the one you're pointing at)
+  // catch the ghost the phone is pointing at, but only when it's close
   function catchGhost() {
-    const ids = Object.keys(ghosts)
-    if (ids.length === 0) { tap('catch (no ghosts right now)'); return }
-    tap('catch ghost ' + ids[0])
-    sendToServer({ type: 'catch', ghost_id: ids[0] })
+    if (target.id === null) { tap('catch (no ghosts right now)'); return }
+    if (level !== 2) { tap(`catch missed: ghost ${target.id} is ${Math.abs(target.dif ?? 0).toFixed(0)}° off`); return }
+    tap('catch ghost ' + target.id)
+    sendToServer({ type: 'catch', ghost_id: target.id })
   }
+
+  // the Controller reports the closest ghost every 100ms; only re-render if it changed
+  const onCompassUpdate = useCallback((dif: number | null, id: string | null) => {
+    const rounded = dif === null ? null : Math.round(dif)
+    setTarget((old) => (old.dif === rounded && old.id === id ? old : { dif: rounded, id }))
+  }, [])
 
   function toggleHunting() {
     tap(buzzOn ? 'stop hunting' : 'start hunting')
     setBuzzOn(!buzzOn)
-  }
-
-  function pickLevel(i: number) {
-    tap('level ' + LEVELS[i])
-    setLevel(i)
   }
 
   const ghostCount = Object.keys(ghosts).length
@@ -140,7 +159,20 @@ function App() {
         <h3>status</h3>
         <p>player: <b>{PLAYER_ID}</b></p>
         <p>server: <b>{status}</b></p>
-        <p>ghosts available: <b>{ghostCount}</b>{ghostCount >= 5 && ' (full: catch one to spawn more)'}</p>
+        <p>ghosts available: <b>{ghostCount}</b></p>
+      </section>
+
+      {/* scoreboard: sent by the server with every ghost update */}
+      <section>
+        <h3>scores</h3>
+        {Object.keys(scores).length === 0 ? <p>no catches yet</p> : (
+          <ol>
+            {Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([p, n]) => (
+              <li key={p}>{p === PLAYER_ID ? <b>{p} (you)</b> : p}: {n}</li>
+            ))}
+          </ol>
+        )}
+        <button onClick={() => { tap('new game'); sendToServer({ type: 'reset' }) }}>new game</button>
       </section>
 
       {/* claude: hunting: vibration test + catching */}
@@ -151,13 +183,8 @@ function App() {
           {' '}<b>{buzzOn ? 'hunting' : 'not hunting'}</b>
         </p>
         <p>
-          {LEVELS.map((name, i) => (
-            <button key={i} onClick={() => pickLevel(i)}
-                    style={{ fontWeight: level === i ? 'bold' : 'normal', outline: level === i ? '2px solid' : 'none' }}>
-              {name}
-            </button>
-          ))}
-          {' '}level: <b>{LEVELS[level]}</b>
+          level: <b>{LEVELS[level]}</b>
+          {target.id !== null && <> (ghost {target.id}, {target.dif}° off)</>}
         </p>
         <p><button onClick={catchGhost}>catch a ghost</button></p>
       </section>
@@ -170,7 +197,7 @@ function App() {
         <ul>{messages.map((m, i) => <li key={i}>{m}</li>)}</ul>
       </section>
       
-      <Controller ghosts={ghosts} player_offset={[0, 0]} />
+      <Controller ghosts={ghosts} player_offset={PLAYER_OFFSET} onUpdate={onCompassUpdate} />
     </div>
   )
 }

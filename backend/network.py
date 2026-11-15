@@ -3,11 +3,14 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 router = APIRouter()
 
 # buffer for storing the ghost kills through pi
-MAX_PLAYERS = 3
+MAX_PLAYERS = 6
 players = {}
 
-# ghost ids that phones have caught; main.py's Game reads and empties this every tick
-ghost_kill_buffer: list[int] = []
+# (player_id, ghost_id) catches from phones; main.py's Game reads and empties this every tick
+ghost_kill_buffer: list[tuple[str, int]] = []
+
+# set to True by a phone's "reset" message; main.py clears ghosts + scores on the next tick
+reset_requested = [False]
 
 
 # send a msg to one player
@@ -51,7 +54,11 @@ async def websocket_endpoint(websocket: WebSocket, player_id: str):
 
             # phone caught a ghost -> add it to the kill buffer
             if data.get("type") == "catch":
-                ghost_kill_buffer.append(int(data["ghost_id"]))  # int(): JSON sends ids as text
+                ghost_kill_buffer.append((player_id, int(data["ghost_id"])))  # int(): JSON sends ids as text
+                continue
+
+            if data.get("type") == "reset":
+                reset_requested[0] = True
                 continue
 
             # reply back to that phone

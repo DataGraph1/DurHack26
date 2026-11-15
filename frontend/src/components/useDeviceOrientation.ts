@@ -10,7 +10,6 @@ export interface OrientationData {
 
 type PermissionState = "unknown" | "granted" | "denied" | "unsupported";
 
-interface DeviceOrientationEventiOS extends DeviceOrientationEvent {}
 interface DeviceOrientationEventConstructoriOS {
   requestPermission?: () => Promise<"granted" | "denied">;
 }

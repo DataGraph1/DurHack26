@@ -1,104 +1,99 @@
-import { useEffect, useState, useCallback } from "react";
-import { useDeviceOrientation, type OrientationData } from "./useDeviceOrientation";
+import { useEffect, useRef, useState } from "react";
+import { useDeviceOrientation } from "./useDeviceOrientation";
 
-const fmt = (n: number | null) => (n === null ? "n/a" : n.toFixed(1));
+// All angles here are compass-style: degrees clockwise, 0..360.
+// Ghost angles from the server are positions on a circle of radius GHOST_RADIUS
+// around the room centre; the player stands at player_offset inside that circle.
+const GHOST_RADIUS = 2;
 
 interface ControllerProps {
     ghosts: Record<string, number>;
     player_offset: [number, number];
-    onUpdate?: (closestDif: number, closestId: string) => void;
+    // diff = signed degrees from where the phone points to the ghost (-180..180)
+    onUpdate?: (closestDif: number | null, closestId: string | null) => void;
+}
+
+function toRad(deg: number) {
+    return (deg * Math.PI) / 180;
+}
+
+// wrap any angle difference into -180..180
+function wrap180(deg: number) {
+    return ((((deg + 180) % 360) + 360) % 360) - 180;
+}
+
+// bearing from the player to a ghost sitting on the circle at ghost_angle
+function bearingToGhost(ghost_angle: number, player: [number, number]) {
+    const gx = GHOST_RADIUS * Math.sin(toRad(ghost_angle));
+    const gy = GHOST_RADIUS * Math.cos(toRad(ghost_angle));
+    const dx = gx - player[0];
+    const dy = gy - player[1];
+    return ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+}
+
+// deviceorientation alpha grows counter-clockwise; flip it to a compass heading
+function headingFromAlpha(alpha: number | null) {
+    return alpha === null ? 0 : (360 - alpha) % 360;
 }
 
 export function Controller({ ghosts, player_offset, onUpdate }: ControllerProps) {
-    const [closestGhostDif, setClosestGhostDif] = useState<number>(0);
-    const [closestGhostId, setClosestGhostId] = useState<string>("-1");
+    const { orientation, latest, permission, requestPermission } = useDeviceOrientation();
+    const [closestGhostDif, setClosestGhostDif] = useState<number | null>(null);
+    const [closestGhostId, setClosestGhostId] = useState<string | null>(null);
+    const [manualHeading, setManualHeading] = useState(0);
 
-    const { orientation, latest, permission, requestPermission } =
-        useDeviceOrientation();
-
-    // --- math helpers (unchanged) ---
-    function degrees_to_radians(degrees: number): number {
-        return degrees * (Math.PI / 180);
-    }
-    function sub_coords(a: [number, number], b: [number, number]): [number, number] {
-        return [a[0] - b[0], a[1] - b[1]];
-    }
-    function add_coords(a: [number, number], b: [number, number]): [number, number] {
-        return [a[0] + b[0], a[1] + b[1]];
-    }
-    function div_coords(a: [number, number], b: [number, number]): [number, number] {
-        return [a[0] / b[0], a[1] / b[1]];
-    }
-    function abs_coords(c: [number, number]): [number, number] {
-        return [Math.abs(c[0]), Math.abs(c[1])];
-    }
-    function calcAngleDegrees(x: number, y: number): number {
-        return (Math.atan2(y, x) * 180) / Math.PI;
+    // backup for laptops / broken sensors: the slider pretends to be the compass
+    function aimManually(heading: number) {
+        setManualHeading(heading);
+        latest.current = { alpha: (360 - heading) % 360, beta: 0, gamma: 0, absolute: true };
     }
 
-    function local_rot(global_rot: number, local_center: [number, number]) {
-        const global_radius = 2;
-        let global_point: [number, number] = [
-            global_radius * Math.cos(degrees_to_radians(global_rot)),
-            global_radius * Math.sin(degrees_to_radians(global_rot))
-        ];
-        let v: [number, number] = sub_coords(global_point, local_center);
-        let local_point = add_coords(local_center, div_coords(v, abs_coords(v)));
-        return calcAngleDegrees(local_point[0], local_point[1]);
-    }
+    // keep the latest props in a ref so the polling interval doesn't restart every tick
+    const props = useRef({ ghosts, player_offset, onUpdate });
+    props.current = { ghosts, player_offset, onUpdate };
 
-    // --- find the closest ghost ---
-    const findClosestGhost = useCallback((player_rot: number) => {
-        let closest_rot = 1000;
-        let closest_id = "-1";
-
-        for (let key in ghosts) {
-            let value = ghosts[key];
-            let rot = local_rot(value, player_offset);
-
-            if (rot < closest_rot) {
-                closest_rot = rot;
-                closest_id = key;
-            }
-        }
-
-        setClosestGhostDif(closest_rot);
-        setClosestGhostId(closest_id);
-        onUpdate?.(closest_rot, closest_id);
-    }, [ghosts, player_offset, onUpdate]);
-
-    // --- poll the orientation sensor and recompute ---
     useEffect(() => {
-        if (!latest.current) {
-            latest.current = {
-                alpha: 0,
-                beta: 0,
-                gamma: 0,
-                absolute: true,
-            };
-        }
-
         const id = setInterval(() => {
-            if (latest.current) {
-                const alpha = Number(fmt(latest.current.alpha));
-                console.log("GHOSTS:", ghosts);
-                console.log("GHOST COUNT:", Object.keys(ghosts).length);
-                findClosestGhost(alpha);
-                console.log("DIF:", closestGhostDif);
-                console.log("ID:", closestGhostId);
+            const { ghosts, player_offset, onUpdate } = props.current;
+            const heading = headingFromAlpha(latest.current?.alpha ?? null);
+
+            let bestDif: number | null = null;
+            let bestId: string | null = null;
+            for (const key in ghosts) {
+                const dif = wrap180(bearingToGhost(ghosts[key], player_offset) - heading);
+                if (bestDif === null || Math.abs(dif) < Math.abs(bestDif)) {
+                    bestDif = dif;
+                    bestId = key;
+                }
             }
+
+            setClosestGhostDif(bestDif);
+            setClosestGhostId(bestId);
+            onUpdate?.(bestDif, bestId);
         }, 100);
 
         return () => clearInterval(id);
-    }, [permission, latest, ghosts, findClosestGhost]);
+    }, [latest]);
 
-    if (permission === "unsupported") return <p>Device orientation not supported.</p>;
-    if (permission === "denied") return <p>Permission denied.</p>;
+    const sensorsOn = permission === "granted" && orientation?.alpha != null;
+    const heading = sensorsOn ? headingFromAlpha(orientation.alpha) : manualHeading;
 
     return (
-        <div>
-            <p>Closest ghost diff: {closestGhostDif}</p>
-            <p>Closest ghost id: {closestGhostId}</p>
-        </div>
+        <section>
+            <h3>sensors</h3>
+            {permission === "unsupported" && <p>no motion sensors: use the slider</p>}
+            {permission === "denied" && <p>motion sensors blocked: use the slider</p>}
+            {(permission === "unknown") && (
+                <p><button onClick={requestPermission}>enable motion sensors</button></p>
+            )}
+            <p>heading: <b>{heading.toFixed(0)}°</b> {sensorsOn ? "(compass)" : "(manual)"}</p>
+            {!sensorsOn && (
+                <p><input type="range" min={0} max={359} value={manualHeading} style={{ width: "100%" }}
+                          onChange={(e) => aimManually(Number(e.target.value))} /></p>
+            )}
+            <p>closest ghost: <b>{closestGhostId ?? "none"}</b>
+                {closestGhostDif !== null && <> ({closestGhostDif.toFixed(0)}° off)</>}
+            </p>
+        </section>
     );
 }
