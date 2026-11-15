@@ -1,3 +1,4 @@
+import Controller from "./components/Controller.tsx"
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
@@ -6,6 +7,10 @@ const PLAYER_ID = new URLSearchParams(window.location.search).get('player') ?? '
 const SERVER_URL = `ws://${window.location.hostname}:8000/ws?player_id=${PLAYER_ID}`
 
 function App() {
+  return (
+    <>
+      <Controller/>
+    </>
   const [status, setStatus] = useState('connecting...')
   const [messages, setMessages] = useState<string[]>([])
   const [text, setText] = useState('')
