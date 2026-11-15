@@ -2,7 +2,7 @@ from fastapi import FastAPI
 import asyncio, random, time
 from contextlib import asynccontextmanager
 from ghost import Ghost
-from network import router, broadcast # connectning web socket to ghost
+from network import router, broadcast, ghost_kill_buffer # connectning web socket to ghost
 
 
 TICK_RATE = 1/20 #20 times a second
@@ -14,7 +14,7 @@ class Game():
         self.ghosts = {}
         self.time_for_next_ghost_spawn : float = 0.0
         self.ghost_id_counter : int = 0
-        self.ghost_kill_buffer : list[int] # list that should contain ints representing the ghost IDs of ghosts to be killed
+        self.ghost_kill_buffer : list[int] = ghost_kill_buffer # same list as network.py; list that should contain ints representing the ghost IDs of ghosts to be killed
 
     def spawn_ghost(self):
         # if current number of ghosts is less than max ghosts, add a ghost to dictionary and increment ID counter
@@ -40,8 +40,8 @@ class Game():
         
         # go through buffer of ghost kills, and remove any ghosts which have been killed
         for ghost_id in self.ghost_kill_buffer:
-            del self.ghosts[ghost_id]
-            self.ghost_kill_buffer.remove(ghost_id)
+            self.ghosts.pop(ghost_id, None) # no crash if the ghost is already gone
+        self.ghost_kill_buffer.clear()
 
     def to_message(self) -> dict:
                 # ghost sending in nums, cant send in json

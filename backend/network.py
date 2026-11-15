@@ -6,6 +6,9 @@ router = APIRouter()
 MAX_PLAYERS = 3
 players = {}
 
+# ghost ids that phones have caught; main.py's Game reads and empties this every tick
+ghost_kill_buffer: list[int] = []
+
 
 # send a msg to one player
 async def send_to(player_id, message):
@@ -45,6 +48,11 @@ async def websocket_endpoint(websocket: WebSocket, player_id: str):
             # wait for the phone to send something
             data = await websocket.receive_json()
             print(player_id, "sent:", data)
+
+            # phone caught a ghost -> add it to the kill buffer
+            if data.get("type") == "catch":
+                ghost_kill_buffer.append(int(data["ghost_id"]))  # int(): JSON sends ids as text
+                continue
 
             # reply back to that phone
             await send_to(player_id, {"type": "reply", "message": "server got: " + str(data.get("message"))})

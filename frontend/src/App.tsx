@@ -9,6 +9,7 @@ function App() {
   const [status, setStatus] = useState('connecting...')
   const [messages, setMessages] = useState<string[]>([])
   const [text, setText] = useState('')
+  const [announcement, setAnnouncement] = useState('')
   const webSocketRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
@@ -22,9 +23,11 @@ function App() {
       ws.onopen = () => setStatus('connected :)')
 
       ws.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-        if (data.type === 'error') gameFull = true
-        setMessages((old) => [...old, data.message])
+      const data = JSON.parse(event.data)
+          if (data.type === 'ghosts') return
+          if (data.type === 'announcement') { setAnnouncement(data.message); return }
+          if (data.type === 'error') gameFull = true
+          setMessages((old) => [...old, data.message])
       }
 
       ws.onclose = () => {
@@ -60,11 +63,17 @@ function App() {
   return (
     <div style={{ padding: 20 }}>
       <h1>ghost game</h1>
+      {announcement && <h2>{announcement}</h2>}
       <p>player: <b>{PLAYER_ID}</b></p>
       <p>server: <b>{status}</b></p>
 
       <input value={text} onChange={(e) => setText(e.target.value)} />
       <button onClick={send}>send</button>
+      
+      {/* tmp test button*/}
+      <button onClick={() => webSocketRef.current?.send(JSON.stringify({ type: 'catch', ghost_id: 0 }))}>
+        catch ghost 0
+      </button>
 
       <ul>{messages.map((m, i) => <li key={i}>{m}</li>)}</ul>
     </div>
