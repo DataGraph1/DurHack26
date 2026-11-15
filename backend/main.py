@@ -31,6 +31,11 @@ class Game():
         if (self.time_for_next_ghost_spawn <= 0):
             spawn_ghost(self)
         
+        # iterate through ghosts, and if a ghost is moving, its angle_pos changes a bit
+        for ghost in self.ghosts.values():
+            if (ghost.type == "moving"):
+                ghost.angle_pos = (ghost.angle_pos + (5 * dt)) % 360 # makes sure it never exceeds 360 degress
+        
         # go through buffer of ghost kills, and remove any ghosts which have been killed
         # this is todo
 
