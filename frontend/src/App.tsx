@@ -11,6 +11,30 @@ const SERVER_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${
 
 const LEVELS = ['far', 'medium', 'close']
 
+// sound effects live in public/sounds/<name>_sound.mp3; the server says which to play
+const SOUND_NAMES = ['spawn_ghost', 'ghost_kill', 'time_left_120', 'time_left_60', 'time_left_30', 'game_over']
+const SOUNDS: Record<string, HTMLAudioElement> = Object.fromEntries(
+  SOUND_NAMES.map((name) => [name, new Audio(`/sounds/${name}_sound.mp3`)]))
+
+function playSound(name?: string | null) {
+  const audio = name ? SOUNDS[name] : undefined
+  if (!audio) return
+  audio.currentTime = 0
+  audio.play().catch(() => {})  // blocked until the user has tapped something
+}
+
+// phones only allow audio after a tap: on the first tap, play+pause every sound silently
+let audioUnlocked = false
+function unlockAudio() {
+  if (audioUnlocked) return
+  audioUnlocked = true
+  for (const audio of Object.values(SOUNDS)) {
+    audio.muted = true
+    audio.play().then(() => { audio.pause(); audio.currentTime = 0; audio.muted = false })
+      .catch(() => { audio.muted = false })
+  }
+}
+
 // how many degrees off the phone can point and still count as medium / close
 const MEDIUM_DEG = 45
 const CLOSE_DEG = 15
@@ -30,6 +54,7 @@ function App() {
   const [announcement, setAnnouncement] = useState('')
   const [ghosts, setGhosts] = useState<Record<string, number>>({})  // ghost id -> angle
   const [scores, setScores] = useState<Record<string, number>>({})  // player id -> ghosts caught
+  const [timeLeft, setTimeLeft] = useState<number | null>(null)     // seconds, from the server
   const webSocketRef = useRef<WebSocket | null>(null)
   const [target, setTarget] = useState<{ dif: number | null, id: string | null }>({ dif: null, id: null })
   const level = levelFromDif(target.dif)       // 0 = far, 1 = med, 2 = close
@@ -60,10 +85,12 @@ function App() {
         if (data.type === 'ghosts') {
           setGhosts(data.ghosts)
           setScores(data.scores ?? {})
+          setTimeLeft(data.time_left ?? null)
           return
         }
         if (data.type === 'announcement') {
           setAnnouncement(data.message)
+          playSound(data.sound)
           log( data.message)
           return
         }
@@ -99,6 +126,7 @@ function App() {
 
   // every button click: tiny buzz + flash + a log line, so you always see it worked
   function tap(line: string) {
+    unlockAudio()
     buzz(30)
     log('you: ' + line)
   }
@@ -160,6 +188,9 @@ function App() {
         <p>player: <b>{PLAYER_ID}</b></p>
         <p>server: <b>{status}</b></p>
         <p>ghosts available: <b>{ghostCount}</b></p>
+        {timeLeft !== null && (
+          <p>time left: <b>{timeLeft > 0 ? `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}` : 'game over (press new game)'}</b></p>
+        )}
       </section>
 
       {/* scoreboard: sent by the server with every ghost update */}
