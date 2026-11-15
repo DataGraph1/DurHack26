@@ -2,15 +2,18 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter()
 
-# buffer for storing the ghost kills through pi
+ROOM_CODE = "GHOST"   # static room code everyone types to join
 MAX_PLAYERS = 6
+MAX_NAME_LENGTH = 12
 players = {}
 
 # (player_id, ghost_id) catches from phones; main.py's Game reads and empties this every tick
 ghost_kill_buffer: list[tuple[str, int]] = []
 
-# set to True by a phone's "reset" message; main.py clears ghosts + scores on the next tick
+# set to True by a phone's "start" (or old "reset") message; main.py starts a new game on the next tick
 reset_requested = [False]
+# set to True by a phone's "lobby" message; main.py goes back to the lobby on the next tick
+lobby_requested = [False]
 
 
 # send a msg to one player
@@ -33,12 +36,21 @@ async def list_players():
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, player_id: str):
+async def websocket_endpoint(websocket: WebSocket, player_id: str, room: str = ""):
     await websocket.accept()
 
-
-    if player_id not in players and len(players) >= MAX_PLAYERS:
-        await websocket.send_json({"type": "error", "message": "game is full"})
+    player_id = player_id.strip()[:MAX_NAME_LENGTH]
+    error = None
+    if room.strip().upper() != ROOM_CODE:
+        error = "wrong room code"
+    elif not player_id:
+        error = "enter a name"
+    elif player_id in players:
+        error = "that name is taken"
+    elif len(players) >= MAX_PLAYERS:
+        error = "room is full"
+    if error:
+        await websocket.send_json({"type": "error", "message": error})
         await websocket.close()
         return
 
@@ -57,8 +69,12 @@ async def websocket_endpoint(websocket: WebSocket, player_id: str):
                 ghost_kill_buffer.append((player_id, int(data["ghost_id"])))  # int(): JSON sends ids as text
                 continue
 
-            if data.get("type") == "reset":
+            if data.get("type") in ("start", "reset"):
                 reset_requested[0] = True
+                continue
+
+            if data.get("type") == "lobby":
+                lobby_requested[0] = True
                 continue
 
             # reply back to that phone

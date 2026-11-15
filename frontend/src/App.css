@@ -165,3 +165,39 @@ footer .link { align-self: center; }
 /* buttons/inputs don't inherit fonts by default */
 .game button { font-family: inherit; }
 .game .catch { font-family: 'Creepster', 'Bungee', cursive; }
+
+/* join screen */
+.title {
+  margin: 48px 0 8px;
+  font-family: 'Creepster', 'Bungee', cursive;
+  font-weight: 400;
+  font-size: 64px;
+  line-height: 1;
+  color: var(--close);
+  letter-spacing: 0.04em;
+}
+.join { display: flex; flex-direction: column; gap: 16px; text-align: left; }
+.join label { display: flex; flex-direction: column; gap: 6px; }
+.join input {
+  font: inherit;
+  font-size: 22px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: #17161f;
+  color: var(--fg);
+  outline: none;
+}
+.join input:focus { border-color: var(--fg); }
+.catch:disabled { opacity: 0.4; }
+.hint.error { color: var(--close); margin: 0; text-align: center; }
+
+/* lobby */
+.lobby { display: flex; flex-direction: column; gap: 20px; }
+.code {
+  font-family: 'Creepster', 'Bungee', cursive;
+  font-size: 72px;
+  line-height: 1.1;
+  letter-spacing: 0.12em;
+  color: var(--close);
+}

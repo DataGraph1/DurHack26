@@ -2,7 +2,7 @@ from fastapi import FastAPI
 import asyncio, random, time
 from contextlib import asynccontextmanager
 from ghost import Ghost
-from network import router, broadcast, ghost_kill_buffer, reset_requested # connectning web socket to ghost
+from network import router, broadcast, ghost_kill_buffer, reset_requested, lobby_requested, players # connectning web socket to ghost
 
 
 TICK_RATE = 1/20 #20 times a second
@@ -24,15 +24,24 @@ class Game():
         self.events : list[tuple[str, str | None]] = []  # (announcement, sound) to send this tick
         self.time_left : float = GAME_LENGTH
         self.warnings_left : list[int] = list(TIME_WARNINGS)
+        self.state : str = "lobby"  # "lobby" (waiting for start) -> "playing" -> "over"
+
+    def to_lobby(self):
+        self.state = "lobby"
+        self.ghosts.clear()
+        self.scores.clear()
+        self.ghost_kill_buffer.clear()
+        self.time_left = GAME_LENGTH
 
     def new_game(self):
+        self.state = "playing"
         self.ghosts.clear()
         self.scores.clear()
         self.ghost_kill_buffer.clear()
         self.time_left = GAME_LENGTH
         self.warnings_left = list(TIME_WARNINGS)
         self.time_for_next_ghost_spawn = 0.0
-        self.events.append(("new game!", None))
+        self.events.append(("game started! find the ghosts", None))
 
     def game_over_message(self) -> str:
         if not self.scores:
@@ -57,9 +66,12 @@ class Game():
         if reset_requested[0]:
             reset_requested[0] = False
             self.new_game()
+        if lobby_requested[0]:
+            lobby_requested[0] = False
+            self.to_lobby()
 
-        # game over: nothing moves until someone presses "new game"
-        if self.time_left <= 0:
+        # lobby / game over: nothing moves until someone presses start
+        if self.state != "playing":
             self.ghost_kill_buffer.clear()
             return
 
@@ -71,6 +83,7 @@ class Game():
             self.events.append((label, f"time_left_{secs}"))
         if self.time_left <= 0:
             self.time_left = 0
+            self.state = "over"
             self.ghosts.clear()
             self.events.append((self.game_over_message(), "game_over"))
             return
@@ -99,7 +112,9 @@ class Game():
                 return {"type": "ghosts",
                         "ghosts": {gid: g.angle_pos for gid, g in self.ghosts.items()},
                         "scores": self.scores,
-                        "time_left": round(self.time_left)}
+                        "time_left": round(self.time_left),
+                        "state": self.state,
+                        "players": list(players)}
 
 game = Game(max_ghosts = 3) #static num (the one in the pi)
 
