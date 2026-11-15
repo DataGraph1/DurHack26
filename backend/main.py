@@ -88,7 +88,7 @@ async def game_loop():
         await asyncio.sleep(max(0, next_tick - time.monotonic()))
 
         # announce time left
-        match self.time_left:
+        match game.time_left:
             case 120:
                 try:
                     await broadcast({"type": "announcement", "message": " 2 minutes left"})
