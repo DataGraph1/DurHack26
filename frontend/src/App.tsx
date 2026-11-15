@@ -49,8 +49,7 @@ function levelFromDif(dif: number | null) {
 
 function App() {
   const [status, setStatus] = useState('connecting...')
-  const [messages, setMessages] = useState<string[]>([])   // the log, newest first
-  const [text, setText] = useState('')
+  const [hint, setHint] = useState('')   // small feedback line under the catch button
   const [announcement, setAnnouncement] = useState('')
   const [ghosts, setGhosts] = useState<Record<string, number>>({})  // ghost id -> angle
   const [scores, setScores] = useState<Record<string, number>>({})  // player id -> ghosts caught
@@ -59,12 +58,10 @@ function App() {
   const [target, setTarget] = useState<{ dif: number | null, id: string | null }>({ dif: null, id: null })
   const level = levelFromDif(target.dif)       // 0 = far, 1 = med, 2 = close
   const [flash, setFlash] = useState(false)    // flash enabled
-  const [buzzOn, setBuzzOn] = useState(false)
 
-  // add a line to the log (newest on top, keep the last 30)
+  // feedback for the player (only the latest line is shown)
   function log(line: string) {
-    const time = new Date().toLocaleTimeString()
-    setMessages((old) => [`${time}  ${line}`, ...old].slice(0, 30))
+    setHint(line)
   }
 
   useEffect(() => {
@@ -76,8 +73,7 @@ function App() {
       webSocketRef.current = ws
 
       ws.onopen = () => {
-        setStatus('connected :)')
-        log('connected to server')
+        setStatus('connected')
       }
 
       ws.onmessage = (event) => {
@@ -91,12 +87,11 @@ function App() {
         if (data.type === 'announcement') {
           setAnnouncement(data.message)
           playSound(data.sound)
-          log( data.message)
           return
         }
         if (data.type === 'error') gameFull = true
 
-        log('server: ' + data.message)
+        if (data.type === 'error') log(data.message)
       }
 
       ws.onclose = () => {
@@ -124,34 +119,28 @@ function App() {
     setTimeout(() => setFlash(false), 80)
   }
 
-  // every button click: tiny buzz + flash + a log line, so you always see it worked
+  // every button click: tiny buzz + flash, and unlocks sound on phones
   function tap(line: string) {
     unlockAudio()
     buzz(30)
-    log('you: ' + line)
+    log(line)
   }
 
   // send a message to the server; returns false (and logs why) if not connected
   function sendToServer(message: object) {
     if (webSocketRef.current?.readyState !== WebSocket.OPEN) {
-      log('not connected, nothing sent')
+      log('not connected')
       return false
     }
     webSocketRef.current.send(JSON.stringify(message))
     return true
   }
 
-  function send() {
-    if (!text) { tap('send (box is empty)'); return }
-    tap('send "' + text + '"')
-    if (sendToServer({ type: 'test', message: text })) setText('')
-  }
-
   // catch the ghost the phone is pointing at, but only when it's close
   function catchGhost() {
-    if (target.id === null) { tap('catch (no ghosts right now)'); return }
-    if (level !== 2) { tap(`catch missed: ghost ${target.id} is ${Math.abs(target.dif ?? 0).toFixed(0)}° off`); return }
-    tap('catch ghost ' + target.id)
+    if (target.id === null) { tap('no ghosts right now'); return }
+    if (level !== 2) { tap(`missed! ${Math.abs(target.dif ?? 0).toFixed(0)}° off`); return }
+    tap('caught!')
     sendToServer({ type: 'catch', ghost_id: target.id })
   }
 
@@ -161,75 +150,56 @@ function App() {
     setTarget((old) => (old.dif === rounded && old.id === id ? old : { dif: rounded, id }))
   }, [])
 
-  function toggleHunting() {
-    tap(buzzOn ? 'stop hunting' : 'start hunting')
-    setBuzzOn(!buzzOn)
-  }
+  const gameOver = timeLeft === 0
+  const myScore = scores[PLAYER_ID] ?? 0
+  const ranking = Object.entries(scores).sort((a, b) => b[1] - a[1])
+  const clock = timeLeft === null ? '-:--' : `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`
 
-  const ghostCount = Object.keys(ghosts).length
-
-  // the near we are the faster it buzzes and flashes 
+  // the nearer we are the faster it buzzes and flashes
   useEffect(() => {
-    if (!buzzOn || level === 0) return
+    if (level === 0 || gameOver) return
     const gap = [0, 800, 200][level]  // buzz lvl
     const id = setInterval(() => buzz(80), gap)
     return () => clearInterval(id)
-  }, [buzzOn, level])
+  }, [level, gameOver])
 
 
   return (
-    <div style={{ padding: 20, background: flash ? '#ff000033' : undefined }}>
-      <h1>ghost game</h1>
-      {announcement && <h2> {announcement}</h2>}
+    <main className={`game ${flash ? 'flash' : ''}`}>
+      <header className="top">
+        <div><span className="label">time</span><b className={timeLeft !== null && timeLeft <= 30 ? 'urgent' : ''}>{clock}</b></div>
+        <div className="me">{PLAYER_ID}</div>
+        <div><span className="label">score</span><b>{myScore}</b></div>
+      </header>
 
-      {/* status: who am I, am I connected, what's the game doing */}
-      <section>
-        <h3>status</h3>
-        <p>player: <b>{PLAYER_ID}</b></p>
-        <p>server: <b>{status}</b></p>
-        <p>ghosts available: <b>{ghostCount}</b></p>
-        {timeLeft !== null && (
-          <p>time left: <b>{timeLeft > 0 ? `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}` : 'game over (press new game)'}</b></p>
-        )}
-      </section>
+      {status !== 'connected' && <p className="banner">{status}</p>}
+      <p className="announcement">{announcement || '\u00a0'}</p>
 
-      {/* scoreboard: sent by the server with every ghost update */}
-      <section>
-        <h3>scores</h3>
-        {Object.keys(scores).length === 0 ? <p>no catches yet</p> : (
-          <ol>
-            {Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([p, n]) => (
-              <li key={p}>{p === PLAYER_ID ? <b>{p} (you)</b> : p}: {n}</li>
-            ))}
+      {gameOver ? (
+        <div className="over">
+          <ol className="scores">
+            {ranking.map(([p, n]) => <li key={p} className={p === PLAYER_ID ? 'you' : ''}><span>{p}</span><b>{n}</b></li>)}
+          </ol>
+          <button className="catch" onClick={() => { tap('new game'); sendToServer({ type: 'reset' }) }}>play again</button>
+        </div>
+      ) : (
+        <>
+          <div className={`signal level-${level}`}>{target.id === null ? 'no ghosts' : LEVELS[level]}</div>
+          <button className="catch" onClick={catchGhost}>catch</button>
+          <p className="hint">{hint || '\u00a0'}</p>
+          <Controller ghosts={ghosts} player_offset={PLAYER_OFFSET} onUpdate={onCompassUpdate} />
+        </>
+      )}
+
+      <footer>
+        {!gameOver && ranking.length > 0 && (
+          <ol className="scores">
+            {ranking.map(([p, n]) => <li key={p} className={p === PLAYER_ID ? 'you' : ''}><span>{p}</span><b>{n}</b></li>)}
           </ol>
         )}
-        <button onClick={() => { tap('new game'); sendToServer({ type: 'reset' }) }}>new game</button>
-      </section>
-
-      {/* claude: hunting: vibration test + catching */}
-      <section>
-        <h3>hunting</h3>
-        <p>
-          <button onClick={toggleHunting}>{buzzOn ? 'stop hunting' : 'start hunting'}</button>
-          {' '}<b>{buzzOn ? 'hunting' : 'not hunting'}</b>
-        </p>
-        <p>
-          level: <b>{LEVELS[level]}</b>
-          {target.id !== null && <> (ghost {target.id}, {target.dif}° off)</>}
-        </p>
-        <p><button onClick={catchGhost}>catch a ghost</button></p>
-      </section>
-
-      {/* log: announcements, server replies, and every click, newest first */}
-      <section>
-        <h3>log</h3>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="test message" />
-        <button onClick={send}>send</button>
-        <ul>{messages.map((m, i) => <li key={i}>{m}</li>)}</ul>
-      </section>
-      
-      <Controller ghosts={ghosts} player_offset={PLAYER_OFFSET} onUpdate={onCompassUpdate} />
-    </div>
+        <button className="link" onClick={() => { tap('new game'); sendToServer({ type: 'reset' }) }}>new game</button>
+      </footer>
+    </main>
   )
 }
 

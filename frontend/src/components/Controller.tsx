@@ -38,8 +38,6 @@ function headingFromAlpha(alpha: number | null) {
 
 export function Controller({ ghosts, player_offset, onUpdate }: ControllerProps) {
     const { orientation, latest, permission, requestPermission } = useDeviceOrientation();
-    const [closestGhostDif, setClosestGhostDif] = useState<number | null>(null);
-    const [closestGhostId, setClosestGhostId] = useState<string | null>(null);
     const [manualHeading, setManualHeading] = useState(0);
 
     // backup for laptops / broken sensors: the slider pretends to be the compass
@@ -67,8 +65,6 @@ export function Controller({ ghosts, player_offset, onUpdate }: ControllerProps)
                 }
             }
 
-            setClosestGhostDif(bestDif);
-            setClosestGhostId(bestId);
             onUpdate?.(bestDif, bestId);
         }, 100);
 
@@ -76,24 +72,19 @@ export function Controller({ ghosts, player_offset, onUpdate }: ControllerProps)
     }, [latest]);
 
     const sensorsOn = permission === "granted" && orientation?.alpha != null;
-    const heading = sensorsOn ? headingFromAlpha(orientation.alpha) : manualHeading;
 
     return (
-        <section>
-            <h3>sensors</h3>
-            {permission === "unsupported" && <p>no motion sensors: use the slider</p>}
-            {permission === "denied" && <p>motion sensors blocked: use the slider</p>}
-            {(permission === "unknown") && (
-                <p><button onClick={requestPermission}>enable motion sensors</button></p>
+        <div className="aim">
+            {permission === "unknown" && (
+                <button className="link" onClick={requestPermission}>enable motion sensors</button>
             )}
-            <p>heading: <b>{heading.toFixed(0)}°</b> {sensorsOn ? "(compass)" : "(manual)"}</p>
             {!sensorsOn && (
-                <p><input type="range" min={0} max={359} value={manualHeading} style={{ width: "100%" }}
-                          onChange={(e) => aimManually(Number(e.target.value))} /></p>
+                <label>
+                    <span className="label">aim {manualHeading}°</span>
+                    <input type="range" min={0} max={359} value={manualHeading}
+                           onChange={(e) => aimManually(Number(e.target.value))} />
+                </label>
             )}
-            <p>closest ghost: <b>{closestGhostId ?? "none"}</b>
-                {closestGhostDif !== null && <> ({closestGhostDif.toFixed(0)}° off)</>}
-            </p>
-        </section>
+        </div>
     );
 }
