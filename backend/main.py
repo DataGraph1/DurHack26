@@ -15,6 +15,7 @@ class Game():
         self.ghosts = {}
         self.time_for_next_ghost_spawn : float = 0.0
         self.ghost_id_counter : int = 0
+        self.ghost_kill_buffer : list[int] # list that should contain ints representing the ghost IDs of ghosts to be killed
 
     def spawn_ghost(self):
         # if current number of ghosts is less than max ghosts, add a ghost to dictionary and increment ID counter
@@ -39,7 +40,9 @@ class Game():
                 ghost.angle_pos = (ghost.angle_pos + (5 * dt)) % 360 # makes sure it never exceeds 360 degress
         
         # go through buffer of ghost kills, and remove any ghosts which have been killed
-        # this is todo
+        for ghost_id in self.ghost_kill_buffer:
+            del self.ghosts[ghost_id]
+            self.ghost_kill_buffer.remove(ghost_id)
 
     def to_message(self) -> dict:
                 # ghost sending in nums, cant send in json
