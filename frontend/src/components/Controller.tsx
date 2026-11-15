@@ -1,6 +1,35 @@
-import useDeviceOrientation from './useDeviceOrientation.ts'
+import { useEffect, useState } from "react";
+import { useDeviceOrientation, type OrientationData } from "./useDeviceOrientation";
+
+const fmt = (n: number | null) => (n === null ? "n/a" : n.toFixed(1));
+
 
 export default function Controller() {
+    const { orientation, latest, permission, requestPermission } =
+        useDeviceOrientation();
+    const [text, setText] = useState("Waiting for sensor data...");
+
+    function doSomething(data: OrientationData) {
+        setText(
+            `alpha: ${fmt(data.alpha)}°\n` +
+            `beta:  ${fmt(data.beta)}°\n` +
+            `gamma: ${fmt(data.gamma)}°`
+        );
+    }
+
+    useEffect(() => {
+        if (permission !== "granted") return;
+
+        const id = setInterval(() => {
+        if (latest.current) doSomething(latest.current);
+        }, 100);
+
+        return () => clearInterval(id);
+    }, [permission, latest]);
+
+    if (permission === "unsupported") return <p>Device orientation not supported.</p>;
+    if (permission === "denied") return <p>Permission denied.</p>;
+
     // implementation of: https://stackoverflow.com/questions/300871
     function local_rot(global_rot: number, local_center: [number, number]) {
         const global_radius = 2;
@@ -41,9 +70,14 @@ export default function Controller() {
     console.log(useDeviceOrientation());
     
 
-    return(
+    return (
         <div>
-            
+            <h1>hi</h1>
+            {permission !== "granted" && (
+                <button onClick={requestPermission}>Enable motion sensors</button>
+            )}
+            <pre>{text}</pre>
+            <h1>bye</h1>
         </div>
-    )
-} 
+    );
+}

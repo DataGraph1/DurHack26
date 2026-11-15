@@ -1,68 +1,64 @@
-import { useCallback, useEffect, useState } from "react";
+// useDeviceOrientation.ts
+import { useCallback, useEffect, useRef, useState } from "react";
 
-interface DeviceOrientationState {
-  alpha: number | null;
-  beta: number | null;
-  gamma: number | null;
+export interface OrientationData {
+  alpha: number | null; // z-axis rotation (0-360)
+  beta: number | null;  // x-axis tilt (-180 to 180)
+  gamma: number | null; // y-axis tilt (-90 to 90)
   absolute: boolean;
 }
 
-// Define an extended interface for DeviceOrientationEvent including requestPermission
-interface DeviceOrientationEventExtended extends DeviceOrientationEvent {
+type PermissionState = "unknown" | "granted" | "denied" | "unsupported";
+
+interface DeviceOrientationEventiOS extends DeviceOrientationEvent {}
+interface DeviceOrientationEventConstructoriOS {
   requestPermission?: () => Promise<"granted" | "denied">;
 }
 
-function useDeviceOrientation() {
-  const [orientation, setOrientation] = useState<DeviceOrientationState>({
-    alpha: null,
-    beta: null,
-    gamma: null,
-    absolute: false,
-  });
-
-  // Check if the DeviceOrientationEvent is supported - this will be true in most browsers (even desktop)
-  const isSupported = typeof window.DeviceOrientationEvent !== "undefined";
-
-  // Determine if we need to request permission (for iOS 13+)
-  const [isPermissionGranted, setIsPermissionGranted] = useState(
-    typeof (DeviceOrientationEvent as unknown as DeviceOrientationEventExtended)
-      .requestPermission !== "function",
+export function useDeviceOrientation() {
+  const [permission, setPermission] = useState<PermissionState>(
+    typeof window !== "undefined" && "DeviceOrientationEvent" in window
+      ? "unknown"
+      : "unsupported"
   );
+  const [orientation, setOrientation] = useState<OrientationData | null>(null);
 
-  const handleOrientation = useCallback((event: DeviceOrientationEvent) => {
-    setOrientation({
-      alpha: event.alpha,
-      beta: event.beta,
-      gamma: event.gamma,
-      absolute: event.absolute,
-    });
+  // Ref holds the latest value so loops can read it without re-subscribing
+  const latest = useRef<OrientationData | null>(null);
+
+  const handler = useCallback((e: DeviceOrientationEvent) => {
+    const data: OrientationData = {
+      alpha: e.alpha,
+      beta: e.beta,
+      gamma: e.gamma,
+      absolute: e.absolute,
+    };
+    latest.current = data;
+    setOrientation(data);
+  }, []);
+
+  const requestPermission = useCallback(async () => {
+    const DOE =
+      DeviceOrientationEvent as unknown as DeviceOrientationEventConstructoriOS;
+
+    if (typeof DOE.requestPermission === "function") {
+      try {
+        const result = await DOE.requestPermission();
+        setPermission(result);
+      } catch {
+        setPermission("denied");
+      }
+    } else {
+      // Android / desktop: no prompt needed
+      setPermission("granted");
+    }
   }, []);
 
   useEffect(() => {
-    if (isPermissionGranted) {
-      window.addEventListener("deviceorientation", handleOrientation);
-      return () => {
-        window.removeEventListener("deviceorientation", handleOrientation);
-      };
-    }
-  }, [isPermissionGranted, handleOrientation]);
+    if (permission !== "granted") return;
+    window.addEventListener("deviceorientation", handler);
+    return () => window.removeEventListener("deviceorientation", handler);
+  }, [permission, handler]);
 
-  const requestPermission = useCallback(async () => {
-    const deviceOrientationEvent =
-      DeviceOrientationEvent as unknown as DeviceOrientationEventExtended;
-
-    if (typeof deviceOrientationEvent.requestPermission === "function") {
-      try {
-        const permissionState =
-          await deviceOrientationEvent.requestPermission();
-        setIsPermissionGranted(permissionState === "granted");
-      } catch (error) {
-        console.error("Error requesting device orientation permission:", error);
-      }
-    }
-  }, []);
-
-  return { orientation, requestPermission, isPermissionGranted, isSupported };
+  return { orientation, latest, permission, requestPermission };
 }
-
-export default useDeviceOrientation;
