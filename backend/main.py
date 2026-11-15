@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 import asyncio, random, time
 from contextlib import asynccontextmanager
-from .ghost import Ghost
+from ghost import Ghost
+from network import router, broadcast # connectning web socket to ghost
+
 
 TICK_RATE = 1/20 #20 times a second
 
@@ -17,8 +19,8 @@ class Game():
     def spawn_ghost(self):
         # if current number of ghosts is less than max ghosts, add a ghost to dictionary and increment ID counter
         if (len(self.ghosts) < self.max_ghosts):
-            self.ghosts.update({ghost_id_counter : Ghost()})
-            self.ghost_id_counter++
+            self.ghosts.update({self.ghost_id_counter : Ghost()})
+            self.ghost_id_counter += 1
         
         # reset spawn timer
         self.time_for_next_ghost_spawn = float(random.randint(3, 6))
@@ -29,7 +31,7 @@ class Game():
 
         # if timer is up, attempt to spawn ghost
         if (self.time_for_next_ghost_spawn <= 0):
-            spawn_ghost(self)
+            self.spawn_ghost()
         
         # iterate through ghosts, and if a ghost is moving, its angle_pos changes a bit
         for ghost in self.ghosts.values():
@@ -39,29 +41,14 @@ class Game():
         # go through buffer of ghost kills, and remove any ghosts which have been killed
         # this is todo
 
+    def to_message(self) -> dict:
+                # ghost sending in nums, cant send in json
+                return {"type": "ghosts",
+                        "ghosts": {gid: g.angle_pos for gid, g in self.ghosts.items()}}
 
+game = Game(max_ghosts = 5) #static num (the one in the pi)
 
-
-# runs when code starts
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # asyncio.create_task(game_loop())
-    
-    yield # wait until code ends
-
-app = FastAPI(
-    title="Backend",
-    version="0.1.0",
-    lifespan=lifespan
-)
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
-async def game_loop(game):
+async def game_loop():
     pre_time = time.monotonic()
     next_tick = pre_time
 
@@ -72,6 +59,11 @@ async def game_loop(game):
 
         game.update(dt)
 
+        try:  
+            await broadcast(game.to_message())
+        except Exception as e:
+            print("broadcast failed:", e)       
+
         # At this point the server should send the ghost dictionary to each client so they update themselves accordingly
 
         # claude generated I dont really understand it but I think its
@@ -79,3 +71,22 @@ async def game_loop(game):
         # I'm disappointed in you - Seg
         next_tick += TICK_RATE
         await asyncio.sleep(max(0, next_tick - time.monotonic()))
+
+# runs when code starts
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    t = asyncio.create_task(game_loop())
+    yield # wait until code ends
+    t.cancel()
+
+
+app = FastAPI(
+    title="Backend",
+    version="0.1.0",
+    lifespan=lifespan
+)
+app.include_router(router)  
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}

@@ -53,6 +53,10 @@ function App() {
     }
   }
 
+  // function announcement() {
+  //   if ()
+  // }
+
   return (
     <div style={{ padding: 20 }}>
       <h1>ghost game</h1>
