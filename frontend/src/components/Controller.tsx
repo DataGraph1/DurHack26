@@ -22,7 +22,7 @@ export default function Controller() {
 
         const id = setInterval(() => {
         if (latest.current) doSomething(latest.current);
-        }, 100);
+        }, 10);
 
         return () => clearInterval(id);
     }, [permission, latest]);
