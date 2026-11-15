@@ -1,3 +1,4 @@
+import Controller from "./components/Controller.tsx"
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
@@ -8,6 +9,10 @@ const SERVER_URL = `ws://${window.location.hostname}:8000/ws?player_id=${PLAYER_
 const LEVELS = ['far', 'medium', 'close']
 
 function App() {
+  return (
+    <>
+      <Controller/>
+    </>
   const [status, setStatus] = useState('connecting...')
   const [messages, setMessages] = useState<string[]>([])   // the log, newest first
   const [text, setText] = useState('')
