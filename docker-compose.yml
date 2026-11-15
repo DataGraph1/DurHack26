@@ -1,9 +1,9 @@
-networks:
-  network:
-    name: network
-    ipam:
-      config:
-        - subnet: 172.39.0.0/24
+# networks:
+#   network:
+#     name: network
+#     ipam:
+#       config:
+#         - subnet: 172.39.0.0/24
 
 services:
   backend:
@@ -18,8 +18,8 @@ services:
         - action: rebuild
           path: ./backend/requirements.txt
 
-    networks:
-      - network
+    # networks:
+    #   - network
   
   frontend:
     build:
@@ -40,8 +40,8 @@ services:
         - action: rebuild
           path: ./frontend/package.json
 
-    networks:
-      - network
+    # networks:
+    #   - network
 
     depends_on:
       - backend
