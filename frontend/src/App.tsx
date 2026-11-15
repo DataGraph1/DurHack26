@@ -1,4 +1,4 @@
-import Controller from "./components/Controller.tsx"
+import { Controller } from "./components/Controller"
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
@@ -169,11 +169,8 @@ function App() {
         <button onClick={send}>send</button>
         <ul>{messages.map((m, i) => <li key={i}>{m}</li>)}</ul>
       </section>
-
-      <section>
-        <h3>sensors</h3>
-        <Controller />
-      </section>
+      
+      <Controller ghosts={ghosts} player_offset={[0, 0]} />
     </div>
   )
 }
