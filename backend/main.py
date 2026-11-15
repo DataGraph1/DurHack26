@@ -6,8 +6,8 @@ from network import router, broadcast, ghost_kill_buffer, reset_requested, lobby
 
 
 TICK_RATE = 1/20 #20 times a second
-GAME_LENGTH = 180.0 # seconds
-TIME_WARNINGS = [120, 60, 30] # announce + play a sound when the timer passes these
+GAME_LENGTH = 60.0 # seconds
+TIME_WARNINGS = [30] # announce + play a sound when the timer passes these
 
 # sounds are played by the phones (frontend/public/sounds/<name>_sound.mp3), not the server:
 # messages carry "sound": "<name>" and the browser plays it
