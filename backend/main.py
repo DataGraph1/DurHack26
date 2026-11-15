@@ -8,7 +8,7 @@ from network import router, broadcast, ghost_kill_buffer # connectning web socke
 TICK_RATE = 1/20 #20 times a second
 
 class Game():
-    
+
     def __init__(self, max_ghosts: int) -> None:
         self.max_ghosts : int = max_ghosts
         self.ghosts = {}
@@ -21,7 +21,7 @@ class Game():
         if (len(self.ghosts) < self.max_ghosts):
             self.ghosts.update({self.ghost_id_counter : Ghost()})
             self.ghost_id_counter += 1
-        
+
         # reset spawn timer
         self.time_for_next_ghost_spawn = float(random.randint(3, 6))
 
@@ -32,12 +32,12 @@ class Game():
         # if timer is up, attempt to spawn ghost
         if (self.time_for_next_ghost_spawn <= 0):
             self.spawn_ghost()
-        
+
         # iterate through ghosts, and if a ghost is moving, its angle_pos changes a bit
         for ghost in self.ghosts.values():
             if (ghost.type == "moving"):
                 ghost.angle_pos = (ghost.angle_pos + (5 * dt)) % 360 # makes sure it never exceeds 360 degress
-        
+
         # go through buffer of ghost kills, and remove any ghosts which have been killed
         for ghost_id in self.ghost_kill_buffer:
             self.ghosts.pop(ghost_id, None) # no crash if the ghost is already gone
@@ -62,12 +62,12 @@ async def game_loop():
         before = len(game.ghosts)
         game.update(dt)
 
-        try:  
+        try:
             if len(game.ghosts) > before:
                 await broadcast({"type": "announcement", "message": " ghost appeared"})
             await broadcast(game.to_message())
         except Exception as e:
-            print("broadcast failed:", e)       
+            print("broadcast failed:", e)
 
         # At this point the server should send the ghost dictionary to each client so they update themselves accordingly
 
@@ -90,7 +90,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
-app.include_router(router)  
+app.include_router(router)
 
 @app.get("/health")
 async def health():
