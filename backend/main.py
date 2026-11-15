@@ -15,6 +15,7 @@ class Game():
         self.time_for_next_ghost_spawn : float = 0.0
         self.ghost_id_counter : int = 0
         self.ghost_kill_buffer : list[int] = ghost_kill_buffer # same list as network.py; list that should contain ints representing the ghost IDs of ghosts to be killed
+        self.time_left : float = 180.0
 
     def spawn_ghost(self):
         # if current number of ghosts is less than max ghosts, add a ghost to dictionary and increment ID counter
@@ -43,6 +44,10 @@ class Game():
             self.ghosts.pop(ghost_id, None) # no crash if the ghost is already gone
         self.ghost_kill_buffer.clear()
 
+        # timer tick down
+        self.time_left -= dt
+
+
     def to_message(self) -> dict:
                 # ghost sending in nums, cant send in json
                 return {"type": "ghosts",
@@ -54,7 +59,7 @@ async def game_loop():
     pre_time = time.monotonic()
     next_tick = pre_time
 
-    while True:
+    while (game.time_left > 0): # check if game ended
         now = time.monotonic()
         dt = now - pre_time
         pre_time = now
@@ -76,6 +81,31 @@ async def game_loop():
         # I'm disappointed in you - Seg
         next_tick += TICK_RATE
         await asyncio.sleep(max(0, next_tick - time.monotonic()))
+
+        # announce time left
+        match self.time_left:
+            case 120:
+                try:
+                    await broadcast({"type": "announcement", "message": " 2 minutes left"})
+                except Exception as e:
+                    print("broadcast failed:", e)
+            case 60:
+                try:
+                    await broadcast({"type": "announcement", "message": "1 minute left"})
+                except Exception as e:
+                    print("broadcast failed:", e)
+            case 30:
+                try:
+                    await broadcast({"type": "announcement", "message": "30 seconds left"})
+                except Exception as e:
+                    print("broadcast failed:", e)
+        
+        
+    # end of game announcement
+    try:
+        await broadcast({"type": "announcement", "message": " game over"})
+    except Exception as e:
+        print("broadcast failed:", e)
 
 # runs when code starts
 @asynccontextmanager
