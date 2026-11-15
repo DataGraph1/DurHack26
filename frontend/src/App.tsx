@@ -9,10 +9,6 @@ const SERVER_URL = `ws://${window.location.hostname}:8000/ws?player_id=${PLAYER_
 const LEVELS = ['far', 'medium', 'close']
 
 function App() {
-  return (
-    <>
-      <Controller/>
-    </>
   const [status, setStatus] = useState('connecting...')
   const [messages, setMessages] = useState<string[]>([])   // the log, newest first
   const [text, setText] = useState('')
@@ -172,6 +168,11 @@ function App() {
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="test message" />
         <button onClick={send}>send</button>
         <ul>{messages.map((m, i) => <li key={i}>{m}</li>)}</ul>
+      </section>
+
+      <section>
+        <h3>sensors</h3>
+        <Controller />
       </section>
     </div>
   )
